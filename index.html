@@ -612,7 +612,10 @@
             try {
                 originalFileName = file.name.replace('.pdf', '');
                 const arrayBuffer = await file.arrayBuffer();
-                currentPdfBytes = new Uint8Array(arrayBuffer);
+                currentPdfBytes = new Uint8Array(arrayBuffer).slice(); // Make a copy
+                
+                console.log('Loaded file, bytes:', currentPdfBytes.length);
+                console.log('Header check:', String.fromCharCode(...currentPdfBytes.slice(0, 8)));
                 
                 await processPdfBytes(file.name);
                 dropZone.classList.add('has-file');
@@ -625,9 +628,15 @@
         
         // Process PDF bytes (shared by both file and URL loading)
         async function processPdfBytes(displayName) {
+            // Store a fresh copy for pdf-lib later (PDF.js may modify the buffer)
+            const bytesForPdfLib = currentPdfBytes.slice();
+            
             // Load with PDF.js to get outline
             currentPdfDoc = await pdfjsLib.getDocument({ data: currentPdfBytes }).promise;
             totalPages = currentPdfDoc.numPages;
+            
+            // Restore clean bytes for extraction
+            currentPdfBytes = bytesForPdfLib;
             
             // Update UI
             fileName.textContent = displayName;
@@ -757,8 +766,17 @@
             extractBtn.disabled = true;
             
             try {
-                // Load PDF with pdf-lib
-                const pdfDoc = await PDFLib.PDFDocument.load(currentPdfBytes);
+                // Make a copy of the bytes (in case they were modified)
+                const pdfBytesCopy = currentPdfBytes.slice();
+                
+                console.log('PDF bytes length:', pdfBytesCopy.length);
+                console.log('First 20 bytes:', String.fromCharCode(...pdfBytesCopy.slice(0, 20)));
+                
+                // Load PDF with pdf-lib (with options to handle more PDFs)
+                const pdfDoc = await PDFLib.PDFDocument.load(pdfBytesCopy, {
+                    ignoreEncryption: true,
+                    updateMetadata: false
+                });
                 
                 // Create new document
                 const newPdf = await PDFLib.PDFDocument.create();
