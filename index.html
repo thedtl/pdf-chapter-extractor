@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Chapter Extractor</title>
+    
+    <!-- PDF.js for reading PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <!-- pdf-lib for creating new PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .card h2 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .step-number {
+            background: #3498db;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9em;
+            flex-shrink: 0;
+        }
+        
+        /* Tabs for file source */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1em;
+            color: #666;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover {
+            color: #3498db;
+        }
+        
+        .tab.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+            font-weight: 500;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Drop zone */
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .drop-zone:hover {
+            border-color: #3498db;
+            background: #f8fbfe;
+        }
+        
+        .drop-zone.drag-over {
+            border-color: #3498db;
+            background: #e8f4fc;
+        }
+        
+        .drop-zone.has-file {
+            border-style: solid;
+            border-color: #27ae60;
+            background: #f0fdf4;
+        }
+        
+        .drop-zone input[type="file"] {
+            display: none;
+        }
+        
+        .drop-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        /* URL input */
+        .url-input-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .url-input {
+            flex: 1;
+            padding: 12px 15px;
+            font-size: 1em;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .url-input:focus {
+            border-color: #3498db;
+        }
+        
+        .url-input::placeholder {
+            color: #aaa;
+        }
+        
+        .load-url-btn {
+            padding: 12px 25px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        
+        .load-url-btn:hover:not(:disabled) {
+            background: #2980b9;
+        }
+        
+        .load-url-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .url-hint {
+            margin-top: 12px;
+            font-size: 0.85em;
+            color: #888;
+        }
+        
+        .url-hint code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        
+        .file-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f4fc;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+        
+        /* Chapter list */
+        .chapter-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        
+        .chapter-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.15s;
+        }
+        
+        .chapter-item:last-child {
+            border-bottom: none;
+        }
+        
+        .chapter-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .chapter-item.selected {
+            background: #e8f4fc;
+            border-left: 3px solid #3498db;
+        }
+        
+        .chapter-title {
+            flex: 1;
+        }
+        
+        .chapter-page {
+            color: #888;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
+        
+        .chapter-level-1 { padding-left: 15px; }
+        .chapter-level-2 { padding-left: 35px; font-size: 0.95em; }
+        .chapter-level-3 { padding-left: 55px; font-size: 0.9em; color: #555; }
+        .chapter-level-4 { padding-left: 75px; font-size: 0.85em; color: #666; }
+        
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            color: #888;
+        }
+        
+        /* Extract button */
+        .extract-btn {
+            width: 100%;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .extract-btn:hover:not(:disabled) {
+            background: #2980b9;
+        }
+        
+        .extract-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        /* Progress / Status */
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .status.processing {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Hidden state */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #888;
+            font-size: 0.85em;
+        }
+        
+        .footer a {
+            color: #3498db;
+        }
+        
+        /* Privacy note */
+        .privacy-note {
+            background: #e8f4fc;
+            padding: 12px 15px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            color: #555;
+            margin-top: 15px;
+        }
+        
+        .privacy-note strong {
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <h1>📚 PDF Chapter Extractor</h1>
+    <p class="subtitle">Extract individual chapters from PDFs with a table of contents</p>
+    
+    <!-- Step 1: File Selection -->
+    <div class="card">
+        <h2><span class="step-number">1</span> Select a PDF</h2>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="upload">Upload File</button>
+            <button class="tab" data-tab="url">From URL (Dropbox, etc.)</button>
+        </div>
+        
+        <!-- Upload Tab -->
+        <div class="tab-content active" id="tab-upload">
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-icon">📄</div>
+                <div>Drag & drop a PDF here, or <strong>click to browse</strong></div>
+                <input type="file" id="fileInput" accept=".pdf">
+            </div>
+        </div>
+        
+        <!-- URL Tab -->
+        <div class="tab-content" id="tab-url">
+            <div class="url-input-group">
+                <input type="text" class="url-input" id="urlInput" 
+                       placeholder="Paste Dropbox or direct PDF link here...">
+                <button class="load-url-btn" id="loadUrlBtn">Load PDF</button>
+            </div>
+            <div class="url-hint">
+                💡 <strong>Dropbox:</strong> Use the share link — we'll convert it automatically<br>
+                <code>https://www.dropbox.com/s/xxxxx/file.pdf?dl=0</code>
+            </div>
+        </div>
+        
+        <div class="file-info hidden" id="fileInfo">
+            <strong id="fileName"></strong><br>
+            <span id="pageCount"></span> pages
+        </div>
+        
+        <div class="privacy-note">
+            🔒 <strong>Privacy:</strong> Your PDF is processed entirely in your browser. Nothing is uploaded to any server.
+        </div>
+    </div>
+    
+    <!-- Step 2: Chapter Selection -->
+    <div class="card" id="chapterCard">
+        <h2><span class="step-number">2</span> Choose a Chapter</h2>
+        
+        <div class="chapter-list" id="chapterList">
+            <div class="empty-state" id="emptyState">
+                Open a PDF to see its chapters
+            </div>
+        </div>
+    </div>
+    
+    <!-- Step 3: Extract -->
+    <div class="card" id="extractCard">
+        <h2><span class="step-number">3</span> Extract Chapter</h2>
+        
+        <button class="extract-btn" id="extractBtn" disabled>
+            <span>📥</span> Extract Selected Chapter
+        </button>
+        
+        <div class="status hidden" id="status"></div>
+    </div>
+    
+    <div class="footer">
+        Made for the Digital Theological Library<br>
+        <small>All processing happens locally in your browser</small>
+    </div>
+
+    <script>
+        // Set PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        // State
+        let currentPdfBytes = null;
+        let currentPdfDoc = null;
+        let bookmarks = [];
+        let selectedIndex = null;
+        let totalPages = 0;
+        let originalFileName = '';
+        
+        // DOM Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const urlInput = document.getElementById('urlInput');
+        const loadUrlBtn = document.getElementById('loadUrlBtn');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const pageCount = document.getElementById('pageCount');
+        const chapterList = document.getElementById('chapterList');
+        const emptyState = document.getElementById('emptyState');
+        const extractBtn = document.getElementById('extractBtn');
+        const status = document.getElementById('status');
+        
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+        
+        // File input handling
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        
+        // Drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type === 'application/pdf') {
+                handleFile(file);
+            }
+        });
+        
+        // URL loading
+        loadUrlBtn.addEventListener('click', () => loadFromUrl(urlInput.value));
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loadFromUrl(urlInput.value);
+        });
+        
+        // Check for URL parameter on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const urlParam = params.get('url');
+            if (urlParam) {
+                // Switch to URL tab
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelector('[data-tab="url"]').classList.add('active');
+                document.getElementById('tab-url').classList.add('active');
+                
+                urlInput.value = urlParam;
+                loadFromUrl(urlParam);
+            }
+        });
+        
+        // Convert various URLs to direct download links
+        function convertToDirectUrl(url) {
+            url = url.trim();
+            
+            // Dropbox
+            if (url.includes('dropbox.com')) {
+                // Convert www.dropbox.com to dl.dropboxusercontent.com
+                url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+                // Remove dl=0 or change to dl=1
+                url = url.replace('?dl=0', '').replace('&dl=0', '');
+                url = url.replace('?dl=1', '').replace('&dl=1', '');
+                return url;
+            }
+            
+            // Google Drive (limited support - must be publicly shared)
+            if (url.includes('drive.google.com/file/d/')) {
+                const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (match) {
+                    return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+                }
+            }
+            
+            // OneDrive (limited support)
+            if (url.includes('1drv.ms') || url.includes('onedrive.live.com')) {
+                // OneDrive direct links are tricky, try adding download=1
+                if (!url.includes('download=1')) {
+                    url += (url.includes('?') ? '&' : '?') + 'download=1';
+                }
+                return url;
+            }
+            
+            // Already a direct link
+            return url;
+        }
+        
+        // Extract filename from URL
+        function getFilenameFromUrl(url) {
+            try {
+                const pathname = new URL(url).pathname;
+                const filename = pathname.split('/').pop();
+                if (filename && filename.includes('.')) {
+                    return decodeURIComponent(filename.replace('.pdf', ''));
+                }
+            } catch (e) {}
+            return 'document';
+        }
+        
+        // Load PDF from URL
+        async function loadFromUrl(url) {
+            if (!url) {
+                showStatus('Please enter a URL', 'error');
+                return;
+            }
+            
+            const directUrl = convertToDirectUrl(url);
+            originalFileName = getFilenameFromUrl(url);
+            
+            showStatus('Downloading PDF...', 'processing');
+            loadUrlBtn.disabled = true;
+            
+            try {
+                const response = await fetch(directUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (contentType && !contentType.includes('pdf') && !contentType.includes('octet-stream')) {
+                    console.warn('Content-Type is not PDF:', contentType);
+                }
+                
+                const arrayBuffer = await response.arrayBuffer();
+                currentPdfBytes = new Uint8Array(arrayBuffer);
+                
+                await processPdfBytes(originalFileName + '.pdf');
+                
+            } catch (error) {
+                console.error(error);
+                
+                // Provide helpful error messages
+                let errorMsg = 'Error loading PDF: ';
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMsg += 'Could not access the URL. Make sure the file is publicly shared.';
+                } else if (error.message.includes('CORS')) {
+                    errorMsg += 'Access blocked by the server. Try downloading the file and uploading it directly.';
+                } else {
+                    errorMsg += error.message;
+                }
+                
+                showStatus(errorMsg, 'error');
+            }
+            
+            loadUrlBtn.disabled = false;
+        }
+        
+        // Handle local file selection
+        async function handleFile(file) {
+            if (!file) return;
+            
+            showStatus('Processing PDF...', 'processing');
+            
+            try {
+                originalFileName = file.name.replace('.pdf', '');
+                const arrayBuffer = await file.arrayBuffer();
+                currentPdfBytes = new Uint8Array(arrayBuffer);
+                
+                await processPdfBytes(file.name);
+                dropZone.classList.add('has-file');
+                
+            } catch (error) {
+                console.error(error);
+                showStatus('Error reading PDF: ' + error.message, 'error');
+            }
+        }
+        
+        // Process PDF bytes (shared by both file and URL loading)
+        async function processPdfBytes(displayName) {
+            // Load with PDF.js to get outline
+            currentPdfDoc = await pdfjsLib.getDocument({ data: currentPdfBytes }).promise;
+            totalPages = currentPdfDoc.numPages;
+            
+            // Update UI
+            fileName.textContent = displayName;
+            pageCount.textContent = totalPages;
+            fileInfo.classList.remove('hidden');
+            
+            // Get bookmarks/outline
+            const outline = await currentPdfDoc.getOutline();
+            
+            if (outline && outline.length > 0) {
+                bookmarks = await processOutline(outline, currentPdfDoc);
+                renderChapters();
+                hideStatus();
+            } else {
+                bookmarks = [];
+                renderChapters();
+                showStatus('This PDF does not have a table of contents (bookmarks).', 'error');
+            }
+        }
+        
+        // Process PDF.js outline into our format
+        async function processOutline(outline, pdfDoc, level = 1) {
+            const results = [];
+            
+            for (const item of outline) {
+                let pageNum = 1;
+                
+                // Get page number from destination
+                if (item.dest) {
+                    try {
+                        let dest = item.dest;
+                        if (typeof dest === 'string') {
+                            dest = await pdfDoc.getDestination(dest);
+                        }
+                        if (dest && dest[0]) {
+                            const pageRef = dest[0];
+                            const pageIndex = await pdfDoc.getPageIndex(pageRef);
+                            pageNum = pageIndex + 1;
+                        }
+                    } catch (e) {
+                        console.warn('Could not resolve destination for:', item.title);
+                    }
+                }
+                
+                results.push({
+                    title: item.title,
+                    page: pageNum,
+                    level: level
+                });
+                
+                // Process children
+                if (item.items && item.items.length > 0) {
+                    const children = await processOutline(item.items, pdfDoc, level + 1);
+                    results.push(...children);
+                }
+            }
+            
+            return results;
+        }
+        
+        // Render chapter list
+        function renderChapters() {
+            chapterList.innerHTML = '';
+            selectedIndex = null;
+            extractBtn.disabled = true;
+            
+            if (bookmarks.length === 0) {
+                chapterList.innerHTML = '<div class="empty-state">No table of contents found in this PDF</div>';
+                return;
+            }
+            
+            bookmarks.forEach((bm, index) => {
+                const div = document.createElement('div');
+                div.className = `chapter-item chapter-level-${Math.min(bm.level, 4)}`;
+                div.innerHTML = `
+                    <span class="chapter-title">${escapeHtml(bm.title)}</span>
+                    <span class="chapter-page">p. ${bm.page}</span>
+                `;
+                div.addEventListener('click', () => selectChapter(index));
+                chapterList.appendChild(div);
+            });
+        }
+        
+        // Select a chapter
+        function selectChapter(index) {
+            // Remove previous selection
+            document.querySelectorAll('.chapter-item').forEach(el => el.classList.remove('selected'));
+            
+            // Add new selection
+            const items = document.querySelectorAll('.chapter-item');
+            items[index].classList.add('selected');
+            
+            selectedIndex = index;
+            extractBtn.disabled = false;
+        }
+        
+        // Get page range for selected chapter
+        function getPageRange(index) {
+            const selected = bookmarks[index];
+            const startPage = selected.page;
+            const selectedLevel = selected.level;
+            
+            let endPage = totalPages;
+            
+            // Find next chapter at same or higher level
+            for (let i = index + 1; i < bookmarks.length; i++) {
+                if (bookmarks[i].level <= selectedLevel) {
+                    endPage = bookmarks[i].page - 1;
+                    break;
+                }
+            }
+            
+            // Ensure valid range
+            endPage = Math.max(startPage, Math.min(endPage, totalPages));
+            
+            return { startPage, endPage };
+        }
+        
+        // Extract chapter
+        extractBtn.addEventListener('click', async () => {
+            if (selectedIndex === null || !currentPdfBytes) return;
+            
+            const selected = bookmarks[selectedIndex];
+            const { startPage, endPage } = getPageRange(selectedIndex);
+            
+            showStatus(`Extracting pages ${startPage} to ${endPage}...`, 'processing');
+            extractBtn.disabled = true;
+            
+            try {
+                // Load PDF with pdf-lib
+                const pdfDoc = await PDFLib.PDFDocument.load(currentPdfBytes);
+                
+                // Create new document
+                const newPdf = await PDFLib.PDFDocument.create();
+                
+                // Copy pages (pdf-lib uses 0-based index)
+                const pageIndices = [];
+                for (let i = startPage - 1; i < endPage; i++) {
+                    pageIndices.push(i);
+                }
+                
+                const copiedPages = await newPdf.copyPages(pdfDoc, pageIndices);
+                copiedPages.forEach(page => newPdf.addPage(page));
+                
+                // Save and download
+                const newPdfBytes = await newPdf.save();
+                downloadPdf(newPdfBytes, `${originalFileName} - ${sanitizeFilename(selected.title)}.pdf`);
+                
+                const pageCountExtracted = endPage - startPage + 1;
+                showStatus(`✓ Successfully extracted ${pageCountExtracted} pages!`, 'success');
+                
+            } catch (error) {
+                console.error(error);
+                showStatus('Error extracting chapter: ' + error.message, 'error');
+            }
+            
+            extractBtn.disabled = false;
+        });
+        
+        // Download PDF
+        function downloadPdf(bytes, filename) {
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // Utility functions
+        function sanitizeFilename(title) {
+            return title.replace(/[<>:"/\\|?*]/g, '_').substring(0, 80);
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function showStatus(message, type) {
+            status.className = `status ${type}`;
+            status.innerHTML = type === 'processing' 
+                ? `<span class="spinner"></span>${message}`
+                : message;
+            status.classList.remove('hidden');
+        }
+        
+        function hideStatus() {
+            status.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
